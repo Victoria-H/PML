@@ -1,0 +1,323 @@
+---
+title: "Practical Machine Learning: Course Project"
+author: "Victoria Hunt"
+date: "15 May 2015"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+```
+
+###ABSTRACT
+
+Practical Machine Learning is one of ten modules offered by the Johns Hopkins Data Science specialisation with Coursera. The course project is to build a machine learning algorithm to predict activity quality from activity monitors based on the Human Activity Recognition, Weight Lifting Exercise data set.  http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises
+R code is included in the document.
+The objective is also to explain our reasoning and method behind the building of the model and show understanding of study design.
+This is my submission.
+
+###INTRODUCTION
+
+<i style= "color:red"> NOTE TO PEER GRADERS: I realise this report may be too verbose (word count just OK). At the risk of being penalised for either the length or the inclusion of this comment, I would like to ask for detailed feedback on my reasoning. I'm completely new to machine learning, as maybe you are, but really wish to learn both the mechanics of it and an intelligent approach. If you are able to give me informed feedback, please do so. Thank you in advance for any extra time this takes.</i> 
+
+<br>
+
+####Background
+
+<i> This human activity recognition research has traditionally focused on discriminating between different activities, i.e. to predict "which" activity was performed at a specific point in time. The approach we propose for the Weight Lifting Exercises dataset is to investigate "how (well)" an activity was performed by the wearer. The "how (well)" investigation has only received little attention so far, even though it potentially provides useful information for a large variety of applications,such as sports training.</i>  HAR
+
+<br>
+
+####Objective of Prediction Algorithm
+
+From sensor measurements on the body and equipment of subjects doing a particular weight lifting exercise, predict the quality class. ie. Is the subject doing the activity correctly (class A) or are they a common error (classes B-E)?
+
+<br>
+
+####Data
+
+Subjects were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. 
+
+Measurements were taken from sensors mounded on the belt, arm, forearm and dumbbell.
+
+We were provided with a dataset of 19622 observations of 160 variables explained as follows.
+
+
+
+7           |            + 4  x |        (  9 | + 4 | + 3 x 8 + 1  ) | + 1   =  160 variables
+----------- | ------------- | ------------- | ------------- | ------------- | -------------
+ID, user_name(one of 6 subjects), variables relating to time and time window| Measurements were taken for each of 4 sensors (arm, forearm, belt, dumbbell)   | Raw measurements (gyro xyz, magnetoscope xyz, acceleration xyz )  | Calculated measurements from the raw (roll, pitch, yaw, total acceleration)  | Time window distribution statistics on the 4 calculated measures  | Class (this is the variable we have to predict from the other measurements)
+
+Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3aPw6pbTX
+
+<br>
+
+
+Comment on Objective
+
+As with all academic assignments, my main aim is to get maximum marks. In this case I know that  my algorithm will be tested by predicting the activity class from measurements taken from the SAME experiment.
+
+However, the objective of the original study is to develop a method of activity recognition that would be transferable and ultimately applicable outside of the lab (sports training at a gym, in the home etc.). This is much more challenging.
+
+In the interest of having an intelligent approach, I will balance the two objectives as I explore the data.
+
+<br>
+
+###METHOD
+
+The broad method was as follows :
+
+* Some basics  (tools, study design)
+* Exploratory data analysis
+* Exploratory Model testing (on small subset of training data)
+* Choice of model and model building on full training set
+* Testing (possible rework/ensemble) and Validation 
+
+<br>
+
+####Some basics
+
+Tools : data analysis was conducted using R and the caret package. http://topepo.github.io/caret/index.html
+Principal R code in included in this document (some exploratory analysis code excluded)
+
+Study design : After reading the dataset into R it was split it into 3 for cross validation.
+training - 9610 observations (the set for exploration and model building)
+testing -  4123 obsevations (set aside to test the model and possibly use to combine models 'ensemble')
+validation - 5889 observations (set aside as final testing set to obtain estimate of out-of-sample error). Cross validation was also used in the training set, through the caret package.
+
+<br>
+
+####Exploratory data anaylsis on dataset 'training'
+
+Variables
+Of the 160 variables, the 100 corresponding to the distribution statistics contained a significant number of NA or empty cells. I decided to discount these variables.
+No other variable columns contained NAs.
+
+```{r warning=FALSE, cache=TRUE}
+
+library(caret)
+library(MASS)
+library(randomForest)
+library(kernlab)
+
+## read in data
+pmltraining<-read.csv("pml-training.csv")
+
+## remove unwanted variables
+empty<-colSums(is.na(pmltraining))+colSums(pmltraining=="", na.rm=TRUE)
+pmltrainingreduced<-pmltraining[,empty==0]
+
+## data partition
+set.seed(195)
+valIndex = createDataPartition(y=pmltrainingreduced$classe, p = 0.30,list=FALSE)
+training = pmltrainingreduced[-valIndex,]
+validation = pmltrainingreduced[valIndex,]
+testIndex = createDataPartition(y=training$classe, p = 0.30,list=FALSE)
+testing = training[testIndex,]
+training = training[-testIndex,]
+```
+
+<br>
+This leaves 60 variables.
+
+ID variable, time and window variables are particular to this experiment and not useful for transfering the prediction algorithm to other settings.
+
+Note on num_window variable:
+As each time window contains observations from a single activity class, this variable can be used to predict the class directly with 100% accuracy in the training set (and the whole dataset from this experiment) without the need for any complex model.
+This is not transferable of course to outside this experiment and shan't be used in my classifier.
+<i style= "color:gray"> As a pragmatist, I will use it to check the accuracy of my predictions before I submit my answers. </i>
+
+<br>
+
+Raw measurements and calculated values.
+
+For each of the 4 sensors we have 9 raw measurements (gyro, magneto, acceleration : 3-axes).
+The calculated measurements, roll, pitch, yaw and total acceleration are more easily interpretable.
+<br>
+
+fig1 : distribution of calculated features for the 4 sensors by activity class.
+
+
+```{r fig.width=10, fig.height=10}
+## plot showing distribution by class of calculated interpretable variables
+mcalc<-c(8:11,21:24,34:37,47:50) ##columns containing  calculated variables.
+
+featurePlot(x = training[, mcalc],
+            y = training$classe,
+            plot = "density",
+            scales = list(x = list(relation="free"),
+                          y = list(relation="free")),
+            adjust = 1.5,
+            pch = "|",
+            layout = c(4, 4),
+            auto.key = list(columns = 5))
+
+```
+
+Comments : 
+
+* Often multimodal distributions, certainly not normal. 
+* Difficult to see any clear pattern between the classes.
+
+<br>
+
+Subjects
+
+
+It it interesting and important to know the distribution of features between different subjects as if this model is to be applied to other people, fitting of the model to data from just 6 subjects may lead to poor results. 
+
+fig2 : Example of how features vary between subjects (activity class A)
+
+```{r fig.width=10, fig.height=10}
+##classA by user
+featurePlot(x = training[which(training$classe=="A"), mcalc],
+            y = training$user_name[which(training$classe=="A")],
+            plot = "density",
+            scales = list(x = list(relation="free"),
+                          y = list(relation="free")),
+            adjust = 1.5,
+            pch = "|",
+            layout = c(4, 4),
+            auto.key = list(columns = 6))
+```
+
+Comments:
+
+* Absence of calculated measures for some sensors for some subjects (e.g. Jeremy's arm sensor). Further investigation shows some (but not all) of the raw measurements are spurious/missing, leading to false/zero yaw, pitch, roll. (code not shown) 
+
+* Where 'sensible' distributions are present, there is a noticeable difference between subjects. In the HAR report they  used the leave-one-subject-out test in order to measure
+whether the classifier trained for some subjects is still useful for a new subject.
+
+* With expert knowledge, these distributions may be interpretable and this interpretation usable in a explicative model based approach.
+
+<br>
+
+####Exploratory model testing (code not shown)
+
+Using a smaller partition of my training set to save computational time, I explored different machine learning prediction algorithms. 
+
+
+Different models : from the different models available in the caret package I experimented with a selection that had different underlying mechanisms.
+Those retained, were those with the highest accuracy in my training subset.
+
+Feature selection : There are not too many potential predictors in relation to the number of observations in the training set. I used the 52 measurements, and for some models checked how the accuracy compared when I used only the 16 calculated measurements (more easily interpretable, but with more false/absent values), or the 36 raw measurements. I did not use the subject (user_name) because it is not useful when transferring the algorithm to other people. However I guess there are potential applications of HAR which could learn and use specificities of particular users.
+
+Interpretability : The objective here is prediction, not explication. Nevertheless, I would like to explore further the mechanisms behind the different algorithms understanding of how/why the model predicts would give me more confidence about errors outside of this sample.
+
+<br>
+
+Results of Model Exploration on training subset :
+
+Model  | Description | Accuracy (52 predictors) | Accuracy (calculated predictors) | Accuracy (raw predictors)
+------------- | ------------- | ------------- | ------------- | -------------
+random forest | builds multiple decision trees using random selection of variables |90% |88% |87% 
+linear discriminant analysis | linear combination of features - assumes normality in variables which we do not have. |69% | - | -
+quadratic discriminant analysis | no assumption of normality or equal covariances, conic section surfaces to separate classes  |85% |65% |81% 
+support vector machine poly | non linear surfaces to separate classes |85% |78% |82% 
+k nearest neighbours with PCA preprocessing | predicts from the k most similar observations |71% | - | -
+
+<br>
+
+####Choice of model and model building on full training set. Testing. 
+
+From the above results I selected the random forest (rf), support vector machine ploy (svmpoly) and quadratic discriminant analysis (qda) to run on the complete training set. The caret package train function has an option to cross validate (here 10 fold) within the training set.
+
+I chose to use 52 features for prediction (raw measurements and calculated) as it gives higher accuracy, and although the calculated variables are obviously dependent on the raw measures this is not a linear dependence.
+
+Using the created models I predicted on the testing set (leaving the validation set untouched). 
+
+
+```{r}
+##selected classifiers on full training set
+
+##quadratic discriminant analysis
+modqda<-train(training$classe~., method="qda", trControl=trainControl(method = "cv") ,data=training[,c(8:60)])
+CMqda<-confusionMatrix(testing$classe,predict(modqda,testing))
+
+##random forest
+modrf<-train(classe~., method="rf", data=training[,c(8:60)], trControl=trainControl(method = "cv"))
+CMrf<-confusionMatrix(testing$classe,predict(modrf,testing))
+
+##support vector machine (poly)
+modsvm<-train(classe~., method="svmPoly", data=training[,c(8:60)], trControl=trainControl(method = "cv"))
+CMsvm<-confusionMatrix(testing$classe,predict(modsvm,testing))
+```
+
+Results
+
+Model  | Model accuracy (training) | Model accuracy (testing)
+------------- | ------------- | ---------------
+rf  | 0.9873037  | `r CMrf$overall[1]`
+qda  | 0.8931292  | `r CMqda$overall[1]`
+svmpoly  | 0.9874095  | `r CMsvm$overall[1]`
+
+<br>
+
+####Combining predictors (ensembling)
+
+The three algorithms perform well, particularly rf and svmpoly and are sufficiently different.
+
+A belts and braces approach would be to combine these predictors with majority voting, and see if the combined classifier does better.
+
+
+```{r}
+df<-data.frame(predict(modrf,testing),predict(modqda,testing),predict(modsvm,testing))
+##in case of 3 different predictions, this will select the model with the greatest accuracy (first entry)
+predmaj<-apply(df,1,function(x) names(which.max(table(x)))) 
+CMmaj<-confusionMatrix(testing$classe,predmaj)
+CMmaj$overall[1]
+
+```
+
+<br>
+
+####Validation
+
+The combined classifier, does indeed outperform the indivdual models hence this is my chosen model to test on the validation set.
+
+
+```{r}
+dfval<-data.frame(predict(modrf,validation),predict(modqda,validation),predict(modsvm,validation))
+
+predmajval<-apply(dfval,1,function(x) names(which.max(table(x))))
+CMval<-confusionMatrix(validation$classe,predmajval)
+CMval$overall[1]
+```
+
+<br>
+
+###RESULTS
+
+The final model produced an accuracy of `r CMval$overall[1]` in the validation set.
+
+The out of sample error is therefore estimated at `r 1-CMval$overall[1]`
+
+<br>
+
+###CONCLUSION
+
+Using raw and calculated measures from the sensors we are able to use machine learning algorithms to predict the activity class with a high level of accuracy.
+
+Whether our final model would be an efficient predictor in the real world is less sure. 
+
+Issues
+
+* Overfitting of the model to this dataset (in particular the six subjects and the missing measurements)
+* Comment : there may be benefits of training the model to recognise particular users and if sensors are producing eroneous results.
+* Lack of interpretability of the model : although the main goal is prediction not explanation, this lack of interpretability means to me that we are rather 'blind' regarding where it would work well or less well.
+
+
+<br>
+
+####REFERENCES
+
+R MLA list http://topepo.github.io/caret/modelList.html
+
+HAR report http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf
+
+CARET http://topepo.github.io/caret/index.html
+
+```{r}
+
+```
+

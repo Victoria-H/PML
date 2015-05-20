@@ -106,7 +106,7 @@ img {
 <tr class="odd">
 <td align="left">ID, user_name(one of 6 subjects), variables relating to time and time window</td>
 <td align="left">Measurements were taken for each of 4 sensors (arm, forearm, belt, dumbbell)</td>
-<td align="left">Raw measurements (gyro xyz, magnetoscope xyz, acceleration xyz )</td>
+<td align="left">Raw measurements (gyro xyz, magnetometer xyz, acceleration xyz )</td>
 <td align="left">Calculated measurements from the raw (roll, pitch, yaw, total acceleration)</td>
 <td align="left">Time window distribution statistics on the 4 calculated measures</td>
 <td align="left">Class (this is the variable we have to predict from the other measurements)</td>
@@ -270,7 +270,7 @@ featurePlot(x = training[which(training$classe==&quot;A&quot;), mcalc],
 </div>
 <div id="choice-of-model-and-model-building-on-full-training-set.-testing." class="section level4">
 <h4>Choice of model and model building on full training set. Testing.</h4>
-<p>From the above results I selected the random forest (rf), support vector machine ploy (svmpoly) and quadratic discriminant analysis (qda) to run on the complete training set. The caret package train function has an option to cross validate (here 10 fold) within the training set.</p>
+<p>From the above results I selected the random forest (rf), support vector machine ploy (svmpoly) and quadratic discriminant analysis (qda) to run on the complete training set. The caret package train function has an option to cross validate (here 10 fold) within the training set. <i style="color:red"> Is this needed for rf? </i></p>
 <p>I chose to use 52 features for prediction (raw measurements and calculated) as it gives higher accuracy, and although the calculated variables are obviously dependent on the raw measures this is not a linear dependence.</p>
 <p>Using the created models I predicted on the testing set (leaving the validation set untouched).</p>
 <pre class="r"><code>##selected classifiers on full training set
@@ -315,6 +315,7 @@ modsvm&lt;-train(classe~., method=&quot;svmPoly&quot;, data=training[,c(8:60)], 
 </tr>
 </tbody>
 </table>
+<p>Structure of the models can be investigated, to increase intpretability (with some expert knowledge) For example the variable importance in the rf model. (Not done here)</p>
 <p><br></p>
 </div>
 <div id="combining-predictors-ensembling" class="section level4">
@@ -355,9 +356,10 @@ CMval$overall[1]</code></pre>
 <p>Whether our final model would be an efficient predictor in the real world is less sure.</p>
 <p>Issues</p>
 <ul>
-<li>Overfitting of the model to this dataset (in particular the six subjects and the missing measurements)</li>
+<li>Application of the model to other situations (in particular other subjects and the missing measurements)</li>
 <li>Comment : there may be benefits of training the model to recognise particular users and if sensors are producing eroneous results.</li>
 <li>Lack of interpretability of the model : although the main goal is prediction not explanation, this lack of interpretability means to me that we are rather ‘blind’ regarding where it would work well or less well.</li>
+<li>Analysis of the model structure (variable importance in rf for example may give some insight)</li>
 </ul>
 <p><br></p>
 <div id="references" class="section level4">

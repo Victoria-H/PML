@@ -46,7 +46,7 @@ We were provided with a dataset of 19622 observations of 160 variables explained
 
 7           |            + 4  x |        (  9 | + 4 | + 3 x 8 + 1  ) | + 1   =  160 variables
 ----------- | ------------- | ------------- | ------------- | ------------- | -------------
-ID, user_name(one of 6 subjects), variables relating to time and time window| Measurements were taken for each of 4 sensors (arm, forearm, belt, dumbbell)   | Raw measurements (gyro xyz, magnetoscope xyz, acceleration xyz )  | Calculated measurements from the raw (roll, pitch, yaw, total acceleration)  | Time window distribution statistics on the 4 calculated measures  | Class (this is the variable we have to predict from the other measurements)
+ID, user_name(one of 6 subjects), variables relating to time and time window| Measurements were taken for each of 4 sensors (arm, forearm, belt, dumbbell)   | Raw measurements (gyro xyz, magnetometer xyz, acceleration xyz )  | Calculated measurements from the raw (roll, pitch, yaw, total acceleration)  | Time window distribution statistics on the 4 calculated measures  | Class (this is the variable we have to predict from the other measurements)
 
 Read more: http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises#ixzz3aPw6pbTX
 
@@ -220,7 +220,7 @@ k nearest neighbours with PCA preprocessing | predicts from the k most similar o
 
 ####Choice of model and model building on full training set. Testing. 
 
-From the above results I selected the random forest (rf), support vector machine ploy (svmpoly) and quadratic discriminant analysis (qda) to run on the complete training set. The caret package train function has an option to cross validate (here 10 fold) within the training set.
+From the above results I selected the random forest (rf), support vector machine ploy (svmpoly) and quadratic discriminant analysis (qda) to run on the complete training set. The caret package train function has an option to cross validate (here 10 fold) within the training set. <i style= "color:red"> Is this needed for rf? </i> 
 
 I chose to use 52 features for prediction (raw measurements and calculated) as it gives higher accuracy, and although the calculated variables are obviously dependent on the raw measures this is not a linear dependence.
 
@@ -250,6 +250,9 @@ Model  | Model accuracy (training) | Model accuracy (testing)
 rf  | 0.9873037  | `r CMrf$overall[1]`
 qda  | 0.8931292  | `r CMqda$overall[1]`
 svmpoly  | 0.9874095  | `r CMsvm$overall[1]`
+
+Structure of the models can be investigated, to increase intpretability (with some expert knowledge) For example the variable importance in the rf model. (Not done here)
+
 
 <br>
 
@@ -302,9 +305,10 @@ Whether our final model would be an efficient predictor in the real world is les
 
 Issues
 
-* Overfitting of the model to this dataset (in particular the six subjects and the missing measurements)
+* Application  of the model to other situations (in particular other subjects and the missing measurements)
 * Comment : there may be benefits of training the model to recognise particular users and if sensors are producing eroneous results.
-* Lack of interpretability of the model : although the main goal is prediction not explanation, this lack of interpretability means to me that we are rather 'blind' regarding where it would work well or less well.
+* Lack of interpretability of the model : although the main goal is prediction not explanation, this lack of interpretability means to me that we are rather 'blind' regarding where it would work well or less well. 
+* Analysis of the model structure (variable importance in rf for example may give some insight)
 
 
 <br>
